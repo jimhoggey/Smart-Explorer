@@ -117,7 +117,8 @@ def api_undo():
 def api_pick_folder():
     try:
         import webview
-        picked = webview.windows[0].create_file_dialog(webview.FOLDER_DIALOG)
+        kind = webview.FileDialog.FOLDER if hasattr(webview, "FileDialog") else webview.FOLDER_DIALOG
+        picked = webview.windows[0].create_file_dialog(kind)
     except Exception:
         picked = None
     return jsonify(folder=picked[0] if picked else None)
