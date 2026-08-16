@@ -1,0 +1,59 @@
+import json
+import os
+import re
+import uuid
+from pathlib import Path
+
+import config
+
+BAD = re.compile(r'[\\/:*?"<>|\x00-\x1f\x7f]')
+RESERVED = {"CON", "PRN", "AUX", "NUL", *("COM%d" % i for i in range(1, 10)), *("LPT%d" % i for i in range(1, 10))}
+
+
+def sanitize(name, ext):
+    name = re.sub(r"\s+", " ", BAD.sub(" ", name)).strip()[:100].rstrip(" .")
+    if name.split(".")[0].rstrip().upper() in RESERVED:
+        name = "_" + name
+    return (name or "Untitled") + ext
+
+
+def plan(items):
+    taken, out = set(), []
+    for it in items:
+        old = Path(it["path"])
+        stem = sanitize(it["new_name"], "")
+        n, new = 1, stem + old.suffix
+        if new == old.name or not old.is_file():
+            continue
+        while new.lower() in taken or (old.with_name(new).exists() and not old.with_name(new).samefile(old)):
+            n += 1
+            new = "%s (%d)%s" % (stem, n, old.suffix)
+        taken.add(new.lower())
+        out.append((str(old), str(old.with_name(new))))
+    return out
+
+
+def apply(pairs, journal_dir=None):
+    journal_dir = Path(journal_dir or config.CONFIG_DIR / "journal")
+    journal_dir.mkdir(parents=True, exist_ok=True)
+    out = {"journal": uuid.uuid4().hex, "renamed": 0}
+    for old, new in pairs:
+        try:
+            os.rename(old, new)
+        except OSError as e:
+            out["error"] = "Could not rename %s: %s" % (Path(old).name, e.strerror or e)
+            break
+        out["renamed"] += 1
+    (journal_dir / (out["journal"] + ".json")).write_text(json.dumps(pairs[:out["renamed"]]), "utf-8")
+    return out
+
+
+def undo(journal_id, journal_dir=None):
+    path = Path(journal_dir or config.CONFIG_DIR / "journal") / (journal_id + ".json")
+    count = 0
+    for old, new in reversed(json.loads(path.read_text("utf-8"))):
+        if os.path.exists(new) and (not os.path.exists(old) or os.path.samefile(old, new)):
+            os.rename(new, old)
+            count += 1
+    path.unlink()
+    return count

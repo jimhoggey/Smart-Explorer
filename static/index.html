@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Explorer</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>Smart Explorer</h1>
+  <button id="gear" class="icon" title="Settings" aria-label="Settings">&#9881;</button>
+</header>
+
+<section class="bar">
+  <button id="pick">Pick folder</button>
+  <input id="folder" type="text" placeholder="…or paste a folder path and press Enter" spellcheck="false">
+  <button id="name" class="primary" disabled>Name with AI</button>
+  <button id="rename" disabled title="Ctrl/⌘+Enter">Rename all</button>
+</section>
+
+<div id="progress" hidden><i></i></div>
+<p id="empty" class="empty">Pick a folder of slides to get started.</p>
+<main id="grid"></main>
+
+<div id="toast" hidden><span></span><button id="undo" hidden>Undo</button></div>
+
+<dialog id="settings">
+  <form method="dialog">
+    <h2>Settings</h2>
+    <label>OpenRouter API key
+      <input id="key" type="password" placeholder="sk-or-…" autocomplete="off" spellcheck="false">
+    </label>
+    <label>Model
+      <select id="model"></select>
+      <input id="custom" type="text" placeholder="provider/model-id" hidden spellcheck="false">
+    </label>
+    <p id="keymsg" class="msg"></p>
+    <div class="actions">
+      <button type="button" id="test">Test key</button>
+      <span class="grow"></span>
+      <button type="button" id="cancel">Cancel</button>
+      <button type="button" id="save" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
