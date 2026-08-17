@@ -174,7 +174,8 @@ h1 span { color: var(--dim); }
   padding: 11px 12px 11px 16px; z-index: 5;
   background: var(--raise); border: 1px solid var(--line-2); border-radius: var(--r);
   box-shadow: 0 16px 44px rgba(0,0,0,.6);
-  font-size: 13px; animation: rise .2s cubic-bezier(.2,.7,.3,1);
+  max-width: min(620px, calc(100vw - 48px));
+  font-size: 13px; line-height: 1.45; animation: rise .2s cubic-bezier(.2,.7,.3,1);
 }
 #toast::before {
   content: ""; width: 6px; height: 6px; border-radius: 50%;

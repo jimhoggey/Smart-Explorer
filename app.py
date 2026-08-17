@@ -86,7 +86,10 @@ def api_name():
     def work():
         try:
             out = namer.run(key, status()["model"], items, prep.encode, on_progress) if key else namer.mock_run(items, on_progress)
-            job["results"] = {r["id"]: {"proposed": r["proposed"], "error": r.get("error")} for r in out}
+            # Keyed by absolute path, never by list position: this endpoint
+            # re-scans the folder, so an index can point at a different file
+            # than the browser is showing.
+            job["results"] = {r["path"]: {"proposed": r["proposed"], "error": r.get("error")} for r in out}
         except Exception as e:
             job["error"] = str(e)
         job["done"] = True

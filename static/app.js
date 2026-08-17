@@ -20,7 +20,10 @@ function toast(msg, opts = {}) {
   els.toast.classList.toggle("error", !!opts.error);
   els.undo.hidden = !opts.undo;
   els.toast.hidden = false;
-  toastTimer = setTimeout(() => (els.toast.hidden = true), opts.undo ? 12000 : 3500);
+  els.toast.title = opts.error ? "Click to dismiss" : "";
+  // Errors never auto-hide — a silent failure that scrolls past is the thing
+  // this app must not do.
+  if (!opts.error) toastTimer = setTimeout(() => (els.toast.hidden = true), opts.undo ? 12000 : 3500);
 }
 
 const stem = (name) => name.replace(/\.[^.]+$/, "");
@@ -93,15 +96,20 @@ async function nameAll() {
       els.progress.firstElementChild.style.width = (r.total ? (r.progress / r.total) * 90 : 0) + "%";
     } while (!r.done);
     if (r.error) throw new Error(r.error);
-    let errors = 0;
+    let errors = 0, missing = 0, why = null;
     for (const it of items) {
-      const res = r.results[it.id], inp = els.grid.querySelector(`[data-id="${it.id}"] input`);
-      inp.closest(".card").className = "card" + (res && res.error ? " error" : "");
-      if (res && res.error) { errors++; inp.title = res.error; }
-      if (res && res.proposed) { inp.value = res.proposed; updateChanged(inp, it); }
+      const res = r.results[it.path], inp = els.grid.querySelector(`[data-id="${it.id}"] input`);
+      inp.closest(".card").className = "card" + (res && !res.error ? "" : " error");
+      if (!res) { missing++; inp.title = "This file was not present when naming ran — re-scan the folder."; continue; }
+      if (res.error) { errors++; inp.title = res.error; why = why || res.error; }
+      if (res.proposed) { inp.value = res.proposed; updateChanged(inp, it); }
     }
     els.progress.firstElementChild.style.width = "100%";
-    toast(errors ? `Named ${items.length - errors} of ${items.length} — ${errors} could not be read` : `Named ${items.length} files. Review, edit, then Rename all.`);
+    const bad = errors + missing;
+    toast(why ? why
+      : missing ? `${missing} file${missing === 1 ? " is" : "s are"} no longer in the folder — re-scan before renaming`
+      : errors ? `Named ${items.length - errors} of ${items.length} — ${errors} could not be read`
+      : `Named ${items.length} files. Review, edit, then Rename all.`, { error: bad > 0 });
     inputs()[0] && inputs()[0].focus();
   } catch (e) {
     toast(e.message, { error: true });
@@ -176,6 +184,7 @@ els.folder.onchange = () => scan(els.folder.value.trim());
 els.name.onclick = nameAll;
 els.rename.onclick = renameAll;
 els.undo.onclick = undo;
+els.toast.onclick = (e) => { if (e.target !== els.undo) els.toast.hidden = true; };
 els.gear.onclick = () => { fillSettings(); els.settings.showModal(); };
 els.cancel.onclick = () => els.settings.close();
 const guarded = (fn) => () => fn().catch((e) => toast(e.message, { error: true }));

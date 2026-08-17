@@ -1,5 +1,6 @@
 import json
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.error import HTTPError
@@ -16,17 +17,22 @@ class NamerError(Exception):
     pass
 
 
-def _request(url, key, data=None, timeout=90):
+def _request(url, key, data=None, timeout=90, tries=3):
     req = Request(url, data=data, headers={**HEADERS, "Authorization": "Bearer " + key})
-    try:
-        with urlopen(req, timeout=timeout) as r:
-            return json.loads(r.read().decode())
-    except HTTPError as e:
-        raise NamerError("OpenRouter returned HTTP %s: %s" % (e.code, e.read().decode(errors="replace")[:200]))
-    except OSError as e:
-        raise NamerError("Could not reach OpenRouter: %s" % e)
-    except ValueError:
-        raise NamerError("OpenRouter returned invalid JSON")
+    for attempt in range(tries):
+        last = attempt == tries - 1
+        try:
+            with urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read().decode())
+        except HTTPError as e:
+            if last or not (e.code == 429 or e.code >= 500):
+                raise NamerError("OpenRouter returned HTTP %s: %s" % (e.code, e.read().decode(errors="replace")[:200]))
+        except OSError as e:
+            if last:
+                raise NamerError("Could not reach OpenRouter: %s" % e)
+        except ValueError:
+            raise NamerError("OpenRouter returned invalid JSON")
+        time.sleep(2 ** attempt)
 
 
 def chat(key, model, messages, timeout=90):
@@ -68,17 +74,21 @@ def _dedupe(names):
 
 
 def name_all(key, model, descs):
+    """Return (names, error). On failure names fall back to raw slide text and
+    error explains why — the caller MUST surface it, or the batch looks fine."""
+    err = None
     try:
         names = parse_json(chat(key, model, [{"role": "system", "content": NAME_PROMPT}, {"role": "user", "content": json.dumps(descs)}]))
         if isinstance(names, dict):
             names = next((v for v in names.values() if isinstance(v, list)), None)
         if not isinstance(names, list) or len(names) != len(descs):
-            raise NamerError("Expected %d names" % len(descs))
+            raise NamerError("expected %d names, got %s" % (len(descs), len(names) if isinstance(names, list) else type(names).__name__))
         names = [n.get("name") if isinstance(n, dict) else n for n in names]
-    except Exception:
+    except Exception as e:
         names = [None] * len(descs)
+        err = "AI naming failed (%s) — these are the raw words on each slide, not chosen names." % e
     fallback = lambda d: d.get("headline") or Path(d["original"]).stem
-    return _dedupe(n.strip() if isinstance(n, str) and n.strip() else fallback(d) for n, d in zip(names, descs))
+    return _dedupe(n.strip() if isinstance(n, str) and n.strip() else fallback(d) for n, d in zip(names, descs)), err
 
 
 def run(key, model, items, encode, on_progress=None):
@@ -95,12 +105,15 @@ def run(key, model, items, encode, on_progress=None):
     with ThreadPoolExecutor(5) as ex:
         descs = list(ex.map(step, items))
     ok = [{**d, "index": i, "original": it["name"]} for i, (it, d) in enumerate(zip(items, descs)) if "error" not in d]
-    proposed = dict(zip((d["index"] for d in ok), name_all(key, model, ok) if ok else []))
+    names, name_err = name_all(key, model, ok) if ok else ([], None)
+    proposed = dict(zip((d["index"] for d in ok), names))
     out = []
     for i, (it, d) in enumerate(zip(items, descs)):
-        r = {"id": it["id"], "proposed": proposed.get(i, Path(it["name"]).stem)}
+        r = {"id": it["id"], "path": it["path"], "proposed": proposed.get(i, Path(it["name"]).stem)}
         if "error" in d:
             r["error"] = d["error"]
+        elif name_err:
+            r["error"] = name_err
         notify(it["id"], "named", r["proposed"])
         out.append(r)
     return out
@@ -116,7 +129,7 @@ def check_key(key):
 def mock_run(items, on_progress=None):
     out = []
     for i, it in enumerate(items, 1):
-        r = {"id": it["id"], "proposed": "Slide %d" % i}
+        r = {"id": it["id"], "path": it["path"], "proposed": "Slide %d" % i}
         if on_progress:
             on_progress(it["id"], "named", r["proposed"])
         out.append(r)

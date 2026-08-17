@@ -7,6 +7,11 @@ import pytest
 import namer
 
 
+@pytest.fixture(autouse=True)
+def no_backoff(monkeypatch):
+    monkeypatch.setattr(namer.time, "sleep", lambda s: None)
+
+
 def stub(monkeypatch, content, seen=None):
     body = json.dumps({"choices": [{"message": {"content": content}}]}).encode()
 
@@ -64,19 +69,53 @@ DESCS = [
 
 def test_name_all(monkeypatch):
     stub(monkeypatch, '["A", "B", "C"]')
-    assert namer.name_all("k", "m", DESCS) == ["A", "B", "C"]
+    assert namer.name_all("k", "m", DESCS) == (["A", "B", "C"], None)
 
 
 def test_name_all_tolerates_wrapped_shapes(monkeypatch):
     stub(monkeypatch, '{"names": [{"index": 0, "name": "A"}, "B", "C"]}')
-    assert namer.name_all("k", "m", DESCS) == ["A", "B", "C"]
-    stub(monkeypatch, '["A", "B"]')
-    assert namer.name_all("k", "m", DESCS) == ["Giving", "Giving (2)", "c"]
+    assert namer.name_all("k", "m", DESCS) == (["A", "B", "C"], None)
 
 
-def test_name_all_fallback(monkeypatch):
+def test_name_all_reports_failure_it_falls_back_from(monkeypatch):
+    """A failed naming call must never look like success — the fallback is raw
+    slide text, which is plausible enough to be renamed by reflex."""
     monkeypatch.setattr(namer, "urlopen", raise_(URLError("down")))
-    assert namer.name_all("k", "m", DESCS) == ["Giving", "Giving (2)", "c"]
+    monkeypatch.setattr(namer.time, "sleep", lambda s: None)
+    names, err = namer.name_all("k", "m", DESCS)
+    assert names == ["Giving", "Giving (2)", "c"]
+    assert err and "AI naming failed" in err
+
+    stub(monkeypatch, '["A", "B"]')  # wrong length
+    names, err = namer.name_all("k", "m", DESCS)
+    assert names == ["Giving", "Giving (2)", "c"] and err
+
+
+def test_run_marks_every_item_when_naming_failed(monkeypatch):
+    def chat(key, model, messages, timeout=90):
+        if isinstance(messages[1]["content"], list):
+            return '{"kind": "Giving", "headline": "Give", "details": "", "has_details": false}'
+        raise namer.NamerError("HTTP 429")
+
+    monkeypatch.setattr(namer, "chat", chat)
+    items = [{"id": i, "path": "/x/%d.png" % i, "name": "%d.png" % i, "kind": "image"} for i in range(2)]
+    out = namer.run("k", "m", items, lambda i: ["img"])
+    assert all("429" in r["error"] for r in out)
+
+
+def test_request_retries_on_429_then_succeeds(monkeypatch):
+    calls = []
+
+    def flaky(req, timeout=None):
+        calls.append(1)
+        if len(calls) < 3:
+            raise HTTPError("https://x/y", 429, "rate limited", {}, io.BytesIO(b"slow down"))
+        return io.BytesIO(b'{"ok": true}')
+
+    monkeypatch.setattr(namer, "urlopen", flaky)
+    monkeypatch.setattr(namer.time, "sleep", lambda s: None)
+    assert namer._request("https://x/y", "k") == {"ok": True}
+    assert len(calls) == 3
 
 
 def test_run(monkeypatch):
@@ -101,10 +140,11 @@ def test_run(monkeypatch):
 
 
 def test_mock_run():
-    items = [{"id": 7, "name": "a.png"}, {"id": 8, "name": "b.png"}]
+    items = [{"id": 7, "path": "/x/a.png", "name": "a.png"}, {"id": 8, "path": "/x/b.png", "name": "b.png"}]
     calls = []
     out = namer.mock_run(items, on_progress=lambda *a: calls.append(a))
-    assert out == [{"id": 7, "proposed": "Slide 1"}, {"id": 8, "proposed": "Slide 2"}]
+    assert out == [{"id": 7, "path": "/x/a.png", "proposed": "Slide 1"},
+                   {"id": 8, "path": "/x/b.png", "proposed": "Slide 2"}]
     assert len(calls) == 2
 
 
