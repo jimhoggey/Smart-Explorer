@@ -25,9 +25,16 @@ jobs:
           SMART_EXPLORER_PORT: "8765"
         run: |
           dist/SmartExplorer/SmartExplorer* &
-          sleep 10
-          curl -sf http://127.0.0.1:8765/api/status
-      - run: python -c "import shutil; shutil.make_archive('SmartExplorer-${{ runner.os }}', 'zip', 'dist', 'SmartExplorer')"
+          for i in $(seq 1 40); do
+            sleep 2
+            curl -sf http://127.0.0.1:8765/api/status && curl -sf -o /dev/null http://127.0.0.1:8765/ && exit 0
+          done
+          echo "app did not respond within 80s"; exit 1
+      - name: Package
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then src=SmartExplorer.app; else src=SmartExplorer; fi
+          python -c "import shutil,sys; shutil.make_archive('SmartExplorer-$RUNNER_OS','zip','dist',sys.argv[1])" "$src"
       - uses: actions/upload-artifact@v4
         with:
           name: SmartExplorer-${{ runner.os }}

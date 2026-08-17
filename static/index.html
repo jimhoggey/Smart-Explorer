@@ -4,38 +4,48 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Smart Explorer</title>
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header>
-  <h1>Smart Explorer</h1>
-  <button id="gear" class="icon" title="Settings" aria-label="Settings">&#9881;</button>
+  <h1>Smart <span>Explorer</span></h1>
+  <span class="spacer"></span>
+  <div id="stat" aria-live="polite"></div>
+  <button id="gear" class="icon" title="Settings (Ctrl+,)" aria-label="Settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3.2"/>
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.09a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1.03z"/>
+    </svg>
+  </button>
 </header>
 
 <section class="bar">
   <button id="pick">Pick folder</button>
-  <input id="folder" type="text" placeholder="…or paste a folder path and press Enter" spellcheck="false">
+  <input id="folder" type="text" placeholder="…or paste a folder path and press Enter" spellcheck="false" aria-label="Folder path">
   <button id="name" class="primary" disabled>Name with AI</button>
   <button id="rename" disabled title="Ctrl/⌘+Enter">Rename all</button>
 </section>
 
 <div id="progress" hidden><i></i></div>
-<p id="empty" class="empty">Pick a folder of slides to get started.</p>
+
+<p id="empty" class="empty"><b>No folder yet</b><span>Pick a folder of exported slides. Nothing is renamed until you review the names and say so.</span></p>
+
 <main id="grid"></main>
 
-<div id="toast" hidden><span></span><button id="undo" hidden>Undo</button></div>
+<div id="toast" role="status" aria-live="polite" hidden><span></span><button id="undo" hidden>Undo</button></div>
 
-<dialog id="settings">
+<dialog id="settings" aria-labelledby="settings-title">
   <form method="dialog">
-    <h2>Settings</h2>
+    <h2 id="settings-title">Settings</h2>
     <label>OpenRouter API key
       <input id="key" type="password" placeholder="sk-or-…" autocomplete="off" spellcheck="false">
     </label>
     <label>Model
       <select id="model"></select>
-      <input id="custom" type="text" placeholder="provider/model-id" hidden spellcheck="false">
+      <input id="custom" type="text" placeholder="provider/model-id" hidden spellcheck="false" aria-label="Custom model id">
     </label>
-    <p id="keymsg" class="msg"></p>
+    <p id="keymsg" class="msg" aria-live="polite"></p>
     <div class="actions">
       <button type="button" id="test">Test key</button>
       <span class="grow"></span>

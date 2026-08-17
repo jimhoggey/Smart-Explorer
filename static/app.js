@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const els = ["gear", "pick", "folder", "name", "rename", "progress", "empty", "grid", "toast", "undo",
+const els = ["gear", "pick", "folder", "name", "rename", "progress", "empty", "grid", "toast", "undo", "stat",
   "settings", "key", "model", "custom", "keymsg", "test", "cancel", "save"].reduce((o, k) => (o[k] = $(k), o), {});
 let items = [], status = {}, journal = null, toastTimer = null;
 const MODEL_LABELS = {
@@ -29,13 +29,15 @@ const inputs = () => [...els.grid.querySelectorAll("input.name")];
 function render() {
   els.grid.innerHTML = "";
   els.empty.hidden = items.length > 0;
-  els.empty.textContent = "No supported files here (png, jpg, webp, mp4, mov).";
-  for (const it of items) {
-    const card = document.createElement("div");
+  els.empty.firstElementChild.textContent = "Nothing to rename";
+  els.empty.lastElementChild.textContent = "No supported files in that folder (png, jpg, webp, mp4, mov).";
+  items.forEach((it, n) => {
+    const card = document.createElement("article");
     card.className = "card";
     card.dataset.id = it.id;
-    card.innerHTML = `<div class="thumb"><img alt="">${it.kind === "video" ? '<span class="kind">VIDEO</span>' : ""}</div>
-      <div class="orig"></div><input class="name" spellcheck="false" placeholder="—">`;
+    card.style.setProperty("--i", n);
+    card.innerHTML = `<div class="thumb"><img alt=""><span class="idx">${String(n + 1).padStart(2, "0")}</span>${it.kind === "video" ? '<span class="kind">VIDEO</span>' : ""}</div>
+      <div class="meta"><div class="orig"></div><input class="name" spellcheck="false" placeholder="—" aria-label="New name"></div>`;
     if (it.thumb) card.querySelector("img").src = "data:image/jpeg;base64," + it.thumb;
     card.querySelector(".orig").textContent = card.querySelector(".orig").title = it.name;
     const inp = card.querySelector("input");
@@ -47,18 +49,24 @@ function render() {
       next ? (next.focus(), next.select()) : inp.blur();
     });
     els.grid.appendChild(card);
-  }
+  });
   updateButtons();
 }
 
 function updateChanged(inp, it) {
-  inp.classList.toggle("changed", inp.value.trim() !== stem(it.name));
+  const changed = inp.value.trim() !== stem(it.name);
+  inp.classList.toggle("changed", changed);
+  inp.closest(".card").classList.toggle("is-changed", changed);
   updateButtons();
 }
 
 function updateButtons() {
+  const changed = inputs().filter((i) => i.classList.contains("changed")).length;
   els.name.disabled = !items.length;
-  els.rename.disabled = !inputs().some((i) => i.classList.contains("changed"));
+  els.rename.disabled = !changed;
+  els.stat.innerHTML = items.length
+    ? `<b>${items.length}</b> file${items.length === 1 ? "" : "s"}${changed ? ` · <span class="on">${changed} to rename</span>` : ""}`
+    : "";
 }
 
 async function scan(folder) {
@@ -97,7 +105,7 @@ async function nameAll() {
     inputs()[0] && inputs()[0].focus();
   } catch (e) {
     toast(e.message, { error: true });
-    inputs().forEach((i) => (i.closest(".card").className = "card"));
+    inputs().forEach((i, n) => { i.closest(".card").className = "card"; updateChanged(i, items[n]); });
   } finally {
     els.progress.className = "";
     setTimeout(() => (els.progress.hidden = true), 800);
