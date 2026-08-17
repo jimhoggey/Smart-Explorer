@@ -33,8 +33,20 @@ jobs:
       - name: Package
         shell: bash
         run: |
-          if [ "$RUNNER_OS" = "macOS" ]; then src=SmartExplorer.app; else src=SmartExplorer; fi
-          python -c "import shutil,sys; shutil.make_archive('SmartExplorer-$RUNNER_OS','zip','dist',sys.argv[1])" "$src"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            # ditto, not shutil/zip: a .app contains symlinks (Python.framework
+            # Versions/Current). Flattening them breaks the bundle and voids the
+            # code signature, which macOS reports as "damaged and can't be opened".
+            ditto -c -k --sequesterRsrc --keepParent dist/SmartExplorer.app SmartExplorer-macOS.zip
+          else
+            python -c "import shutil; shutil.make_archive('SmartExplorer-Windows','zip','dist','SmartExplorer')"
+          fi
+      - name: Verify macOS bundle survived packaging
+        if: runner.os == 'macOS'
+        run: |
+          rm -rf verify && mkdir verify && ditto -x -k SmartExplorer-macOS.zip verify
+          test -L verify/SmartExplorer.app/Contents/Frameworks/Python.framework/Versions/Current
+          codesign -v verify/SmartExplorer.app
       - uses: actions/upload-artifact@v4
         with:
           name: SmartExplorer-${{ runner.os }}

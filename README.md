@@ -6,7 +6,11 @@ Renames a folder of exported slides (`.png .jpg .jpeg .webp .mp4 .mov`) to conte
 
 **Windows:** download `SmartExplorer-Windows.zip` from the latest [release](../../releases), unzip anywhere, run `SmartExplorer\SmartExplorer.exe`. If SmartScreen warns, click *More info → Run anyway*.
 
-**Mac:** download `SmartExplorer-macOS.zip`, unzip, then in Terminal: `xattr -dr com.apple.quarantine SmartExplorer && ./SmartExplorer/SmartExplorer`.
+**Mac:** download `SmartExplorer-macOS.zip`, unzip, drag **SmartExplorer.app** to Applications. The app is ad-hoc signed, not notarised, so macOS quarantines it on first download — clear that once in Terminal, then open it normally:
+
+```
+xattr -dr com.apple.quarantine /Applications/SmartExplorer.app
+```
 
 ## Get an OpenRouter key
 
